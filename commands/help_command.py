@@ -36,8 +36,13 @@ class HelpView(View):
         )
         
         for cmd_name, cmd_description in commands_list:
+            # Most commands use the bot prefix (e.g. !ping). Some entries are prefixless (e.g. ai <prompt>).
+            if cmd_name.lower().startswith("ai"):
+                display_name = f"`{cmd_name}`"
+            else:
+                display_name = f"`!{cmd_name}`"
             embed.add_field(
-                name=f"`!{cmd_name}`",
+                name=display_name,
                 value=cmd_description,
                 inline=False
             )
@@ -82,6 +87,7 @@ class HelpCommand(commands.Cog):
         """Organize commands into categories"""
         categories = {
             "Basic Commands": [],
+            "AI": [],
             "Role Management": [],
             "Webhook Management": []
         }
@@ -108,6 +114,12 @@ class HelpCommand(commands.Cog):
         # Sort commands within each category
         for category in categories:
             categories[category].sort(key=lambda x: x[0])
+
+        # Add prefixless AI entry (not a discord.py Command)
+        categories["AI"].append((
+            "ai <prompt>",
+            "Chat with the AI (no prefix). Example: `ai hi`"
+        ))
         
         # Filter out empty categories and return as list
         return [(cat, cmds) for cat, cmds in categories.items() if cmds]
