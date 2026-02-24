@@ -1,6 +1,8 @@
 import discord
 from discord.ext import commands
 import logging
+import asyncio
+import aiohttp
 from dotenv import load_dotenv
 from config.config import DISCORD_TOKEN
 from events.onReadyHandler import on_ready_handler
@@ -26,6 +28,59 @@ class TestBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix='!', intents=intents)
 
+        self.ai_api_url = "https://python-api-tfs6.onrender.com/gpt4o1"
+
+    async def _send_discord_text(self, channel: discord.abc.Messageable, text: str):
+        if not text:
+            return
+
+        # Discord messages have a 2000 character limit.
+        for i in range(0, len(text), 2000):
+            await channel.send(text[i:i + 2000])
+
+    async def _handle_ai_message(self, message: discord.Message) -> bool:
+        content = (message.content or "").strip()
+        if not content:
+            return False
+
+        lowered = content.lower()
+        if not (lowered == "ai" or lowered.startswith("ai ")):
+            return False
+
+        prompt = content[2:].lstrip()
+        if not prompt:
+            await message.channel.send("Usage: ai <prompt>")
+            return True
+
+        uid = str(message.author.id)
+        timeout = aiohttp.ClientTimeout(total=45)
+
+        try:
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(self.ai_api_url, params={"prompt": prompt, "uid": uid}) as resp:
+                    if resp.status != 200:
+                        await message.channel.send(f"AI API error (HTTP {resp.status}).")
+                        return True
+
+                    data = await resp.json(content_type=None)
+
+            reply = ""
+            if isinstance(data, dict):
+                reply = str(data.get("reply") or "")
+
+            if not reply:
+                await message.channel.send("AI API returned no reply.")
+                return True
+
+            await self._send_discord_text(message.channel, reply)
+            return True
+        except asyncio.TimeoutError:
+            await message.channel.send("AI API timed out.")
+            return True
+        except aiohttp.ClientError:
+            await message.channel.send("AI API request failed.")
+            return True
+
     async def setup_hook(self):
         # Load command extensions
         await self.load_extension("commands.role_management")
@@ -47,7 +102,15 @@ class TestBot(commands.Bot):
             return  # Don't process commands if spam was detected
         
         # Message censorship
-        await censor_handler(message=message, bot=self)
+        was_deleted = await censor_handler(message=message, bot=self)
+        if was_deleted:
+            return
+
+        # Prefixless AI command: "ai <prompt>"
+        ai_handled = await self._handle_ai_message(message)
+        if ai_handled:
+            return
+
         await self.process_commands(message)
 
     async def on_member_join(self, member: discord.Member):

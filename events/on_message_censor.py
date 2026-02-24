@@ -4,7 +4,7 @@ import discord
 async def censor_handler(message: discord.Message, bot: discord.Client):
     """Handle message censorship"""
     if message.author.bot:
-        return
+        return False
     
     content = message.content.lower()
     
@@ -16,9 +16,13 @@ async def censor_handler(message: discord.Message, bot: discord.Client):
                 f"{message.author.mention} ⚠️ Your message contained inappropriate language and was removed.",
                 delete_after=5
             )
+            return True
         except discord.Forbidden:
             # Bot doesn't have permission to delete messages
             print(f"Could not delete message from {message.author.name}")
+            return False
+
+    return False
 
 
 
