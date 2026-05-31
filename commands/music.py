@@ -4,7 +4,7 @@ import yt_dlp
 import asyncio
 
 # Suppress yt-dlp warnings
-yt_dlp.utils.bug_reports_message = lambda: ''
+yt_dlp.utils.bug_reports_message = lambda *args, **kwargs: ''
 
 # yt-dlp options
 ytdl_format_options = {
